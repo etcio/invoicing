@@ -119,7 +119,7 @@ module Invoicing
 
     included do
       # Register callback if this is the first time acts_as_currency_value has been called
-      before_save :write_back_currency_values, :if => "currency_value_class_info.previous_info.nil?"
+      before_save :write_back_currency_values, if: -> { currency_value_class_info.previous_info.nil? }
     end
 
     # Format a numeric monetary value into a human-readable string, in the currency of the
