@@ -89,43 +89,6 @@ module Invoicing
   # to be on the safe side you can ensure all subclasses are loaded when your application
   # initialises -- but that's not completely DRY ;-)
   module FindSubclasses
-
-    # Overrides <tt>ActiveRecord::Base.sanitize_sql_hash_for_conditions</tt> since this is the method
-    # used to transform a hash of conditions into an SQL query fragment. This overriding method
-    # searches for class method conditions in the hash and transforms them into a condition on the
-    # class name. All further work is delegated back to the superclass method.
-    #
-    # Condition formats are very similar to those accepted by +ActiveRecord+:
-    #   {:my_class_method => 'value'}     # known_subclasses.select{|cls| cls.my_class_method == 'value' }
-    #   {:my_class_method => [1, 2]}      # known_subclasses.select{|cls| [1, 2].include?(cls.my_class_method) }
-    #   {:my_class_method => 3..6}        # known_subclasses.select{|cls| (3..6).include?(cls.my_class_method) }
-    #   {:my_class_method => true}        # known_subclasses.select{|cls| cls.my_class_method }
-    #   {:my_class_method => false}       # known_subclasses.reject{|cls| cls.my_class_method }
-    def sanitize_sql_hash_for_conditions(attrs, table_name = quoted_table_name)
-      new_attrs = {}
-
-      attrs.each_pair do |attr, value|
-        attr = attr_base = attr.to_s
-        attr_table_name = table_name
-
-        # Extract table name from qualified attribute names
-        attr_table_name, attr_base = attr.split('.', 2) if attr.include?('.')
-
-        if columns_hash.include?(attr_base) || ![self.table_name, quoted_table_name].include?(attr_table_name)
-          new_attrs[attr] = value   # Condition on a table column, or another table -- pass through unmodified
-        else
-          begin
-            matching_classes = select_matching_subclasses(attr_base, value)
-            new_attrs["#{self.table_name}.#{inheritance_column}"] = matching_classes.map{|cls| cls.name.to_s}
-          rescue NoMethodError
-            new_attrs[attr] = value # If the class method doesn't exist, fall back to passing condition through unmodified
-          end
-        end
-      end
-
-      super(new_attrs, table_name)
-    end
-
     def expand_hash_conditions_for_aggregates(attrs)
       new_attrs = {}
 

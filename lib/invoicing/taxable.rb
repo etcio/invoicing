@@ -296,7 +296,7 @@ module Invoicing
           original_value = read_attribute("#{method_name}_taxed")
           return nil if original_value.nil? # Can only have a rounding error if the taxed attr was assigned
 
-          original_value = BigDecimal.new(original_value.to_s)
+          original_value = BigDecimal(original_value.to_s)
           converted_value = send("#{method_name}_taxed")
 
           return nil if converted_value.nil?
@@ -350,7 +350,7 @@ module Invoicing
       # +to_status+ must each be either <tt>:taxed</tt> or <tt>:untaxed</tt>.
       def convert(object, attr_without_suffix, value, from_status, to_status)
         return nil if value.nil?
-        value = BigDecimal.new(value.to_s)
+        value = BigDecimal(value.to_s)
         return value if from_status == to_status
 
         if to_status == :taxed
