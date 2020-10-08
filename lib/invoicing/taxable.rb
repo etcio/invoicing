@@ -250,7 +250,7 @@ module Invoicing
         @taxed_or_untaxed[attribute] = :untaxed
         @taxed_attributes[attribute] = nil
       elsif attribute =~ /^(#{attr_regex})_taxed$/
-        if ActiveRecord::VERSION::MAJOR == 4 && ActiveRecord::VERSION::MINOR >= 2
+        if (ActiveRecord::VERSION::MAJOR == 4 && ActiveRecord::VERSION::MINOR >= 2) || ActiveRecord::VERSION::MAJOR == 5
           @attributes.write_cast_value(attribute, value)
         else
           @attributes[attribute] = value

@@ -389,7 +389,7 @@ module Invoicing
         line_items_assoc_id = ledger_item_class_info.method(:line_items).to_sym
         line_items_refl = reflections[line_items_assoc_id] ||
           reflections[line_items_assoc_id.to_s]
-        line_items_table = line_items_refl.quoted_table_name
+        line_items_table = line_items_refl.klass.quoted_table_name
 
         # e.g. `ledger_items`.`id`
         ledger_items_id = quoted_table_name + "." + connection.quote_column_name(primary_key)
@@ -402,8 +402,9 @@ module Invoicing
         ledger_item_foreign_key = line_items_table + "." + connection.quote_column_name(
                                                                                         line_items_refl.klass.send(:line_item_class_info).method(:ledger_item_id))
 
+        quoted_type_column = quoted_table_name + "." + connection.quote_column_name(ledger_item_class_info.method(:type))
         payment_classes = select_matching_subclasses(:is_payment, true).map{|c| c.name}
-        is_payment_class = merge_conditions({ledger_item_class_info.method(:type) => payment_classes})
+        is_payment_class = merge_conditions(["#{quoted_type_column} IN (?)", payment_classes])
 
         joins("LEFT JOIN #{line_items_table} ON #{ledger_item_foreign_key} = #{ledger_items_id}").
         where("(#{ledger_item_foreign_key} IS NULL) OR #{is_payment_class}")
@@ -688,21 +689,26 @@ module Invoicing
         debit_classes  = select_matching_subclasses(:debit_when_sent_by_self, true,  self.table_name, self.inheritance_column).map{|c| c.name}
         credit_classes = select_matching_subclasses(:debit_when_sent_by_self, false, self.table_name, self.inheritance_column).map{|c| c.name}
 
+
+        sender_id = get_quoted_column_name(info.method(:sender_id))
+        recipient_id = get_quoted_column_name(info.method(:recipient_id))
+        status = get_quoted_column_name(info.method(:status))
+
         # rails 3 idiocricies. in case of STI, type of base class is nil. Need special handling
-        debit_when_sent      = merge_conditions(inheritance_condition(debit_classes),  info.method(:sender_id)    => self_id)
-        debit_when_received  = merge_conditions(inheritance_condition(credit_classes), info.method(:recipient_id) => self_id)
-        credit_when_sent     = merge_conditions(inheritance_condition(credit_classes), info.method(:sender_id)    => self_id)
-        credit_when_received = merge_conditions(inheritance_condition(debit_classes),  info.method(:recipient_id) => self_id)
+        debit_when_sent      = merge_conditions(inheritance_condition(debit_classes),  ["#{sender_id} = ?", self_id])
+        debit_when_received  = merge_conditions(inheritance_condition(credit_classes), ["#{recipient_id} = ?", self_id])
+        credit_when_sent     = merge_conditions(inheritance_condition(credit_classes), ["#{sender_id} = ?", self_id])
+        credit_when_received = merge_conditions(inheritance_condition(debit_classes),  ["#{recipient_id} = ?", self_id])
 
         cols = {}
         [:total_amount, :sender_id, :recipient_id, :status, :currency].each do |col|
           cols[col] = connection.quote_column_name(info.method(col))
         end
 
-        sender_is_self    = merge_conditions({info.method(:sender_id)    => self_id})
-        recipient_is_self = merge_conditions({info.method(:recipient_id) => self_id})
+        sender_is_self    = merge_conditions(["#{sender_id} = ?", self_id])
+        recipient_is_self = merge_conditions(["#{recipient_id} = ?", self_id])
         other_id_column = ext.conditional_function(sender_is_self, cols[:recipient_id], cols[:sender_id])
-        accept_status = merge_conditions(info.method(:status) => (options[:with_status] || %w(closed cleared)))
+        accept_status = merge_conditions(["#{status} IN (?)", (options[:with_status] || %w(closed cleared))])
         filter_conditions = "#{accept_status} AND (#{sender_is_self} OR #{recipient_is_self})"
 
         sql = select("#{other_id_column} AS other_id, #{cols[:currency]} AS currency, " +
@@ -756,7 +762,7 @@ module Invoicing
           column = info.method(column)
           quoted_column = connection.quote_column_name(column)
           sql = "SELECT MAX(#{primary_key}) AS id, #{quoted_column} AS ref FROM #{quoted_table_name} WHERE "
-          sql << merge_conditions({column => sender_recipient_ids})
+          sql << merge_conditions(["#{column} IN (?)", sender_recipient_ids])
           sql << " GROUP BY #{quoted_column}"
 
           ActiveRecord::Base.connection.select_all(sql).each do |row|
@@ -784,12 +790,17 @@ module Invoicing
         result_map
       end
 
+      def get_quoted_column_name(column_name)
+        quoted_table_name + "." + connection.quote_column_name(column_name)
+      end
+
       def inheritance_condition(classes)
         segments = []
-        segments << sanitize_sql(inheritance_column => classes)
+        quoted_inheritance_column = get_quoted_column_name(inheritance_column)
+        segments << sanitize_sql(["#{quoted_inheritance_column} IN (?)", classes])
 
         if classes.include?(self.to_s) && self.new.send(inheritance_column).nil?
-          segments << sanitize_sql(type: nil)
+          segments << sanitize_sql("#{get_quoted_column_name(:type)} IS NULL")
         end
 
         "(#{segments.join(') OR (')})" unless segments.empty?

@@ -11,10 +11,12 @@ gemspec
 # your gem to rubygems.org.
 
 gem "pry-rails"
+gem "minitest"
 
 # Issue in database cleaner for sqlite support
 # https://github.com/bmabey/database_cleaner/issues/224
 # https://github.com/bmabey/database_cleaner/pull/241
 gem "database_cleaner", "~> 1.0.1"
+gem "rake", "~> 11"
 
 gem "coveralls", "~> 0.7.0", require: false

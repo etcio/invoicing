@@ -2,8 +2,8 @@ language: ruby
 rvm:
   - 2.0.0
   - 2.1.10
-  - 2.2.9
-  - 2.3.6
+  - 2.2.10
+  - 2.3.8
 gemfile:
   - Gemfile
   - gemfiles/Gemfile.rails-3.2.x
@@ -27,6 +27,10 @@ matrix:
       gemfile: gemfiles/Gemfile.rails-5.1.x
     - rvm: 2.1.10
       gemfile: gemfiles/Gemfile.rails-5.1.x
+
+before_install:
+  - gem uninstall -v '>= 2' -i $(rvm gemdir)@global -ax bundler || true
+  - gem install bundler -v '< 2'
 
 script:
   - bundle exec rake --trace
